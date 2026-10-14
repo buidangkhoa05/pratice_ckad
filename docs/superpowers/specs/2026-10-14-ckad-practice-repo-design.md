@@ -47,12 +47,18 @@ winget install Kubernetes.kustomize
 
 Docker Desktop must be running before `bootstrap.sh`.
 
+A `.gitattributes` with `*.sh text eol=lf` is mandatory, not cosmetic. Git on
+Windows otherwise checks scripts out with CRLF endings, which makes
+`#!/usr/bin/env bash` fail under Git Bash with a `bad interpreter` error that
+names the wrong cause.
+
 ## Repository layout
 
 ```
 pratice_ckad/
 ├── README.md                    # quickstart, exam-day cheatsheet, progress table
 ├── .gitignore                   # scratch/, .ckad-state.json, kubeconfig, *.local.yaml
+├── .gitattributes               # *.sh eol=lf — CRLF breaks bash shebangs
 ├── cluster/
 │   ├── kind-config.yaml
 │   └── bootstrap.sh
