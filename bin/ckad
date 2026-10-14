@@ -88,11 +88,83 @@ check:     ckad verify $id
 EOF
 }
 
+cmd_verify() { # <id>
+  local id="$1" path ns started elapsed=0 rc
+  path="$(_resolve "$id")" || exit 1
+  ns="$(drill_ns "$id")"
+  [[ -f "$path/verify.sh" ]] \
+    || _die "drill $id has no verify.sh - the repo is broken, not your answer"
+
+  started="$SCRATCH_ROOT/$id/.started"
+  [[ -f "$started" ]] && elapsed=$(( $(date +%s) - $(cat "$started") ))
+
+  CKAD_ROOT="$CKAD_ROOT" NS="$ns" bash "$path/verify.sh"
+  rc=$?
+
+  if (( rc == 0 )); then state_record "$id" 1 "$elapsed"
+  else state_record "$id" 0 "$elapsed"; fi
+
+  if (( elapsed > 0 )); then
+    printf 'elapsed: %dm%02ds   target: %s\n' \
+      $(( elapsed / 60 )) $(( elapsed % 60 )) "$(drill_target "$path")"
+  fi
+  (( rc == 0 )) || printf 'stuck? ckad solution %s\n' "$id"
+  return $rc
+}
+
+cmd_solution() { # <id>
+  local id="$1" path f
+  path="$(_resolve "$id")" || exit 1
+  if (( $(state_attempts "$id") == 0 )); then
+    _die "try it first - run 'ckad verify $id' at least once before reading the answer"
+  fi
+  [[ -d "$path/.solution" ]] || _die "drill $id has no .solution directory"
+  for f in "$path/.solution"/*; do
+    [[ -f "$f" ]] || continue
+    printf '\n===== %s =====\n' "$(basename "$f")"
+    cat "$f"
+  done
+}
+
+cmd_reset() { # [<id>|--all]
+  local target="${1:---all}"
+  if [[ "$target" == "--all" ]]; then
+    printf 'recreating the whole cluster...\n'
+    exec bash "$CKAD_ROOT/cluster/bootstrap.sh" --recreate
+  fi
+  local id="$target" ns
+  _resolve "$id" >/dev/null || exit 1
+  ns="$(drill_ns "$id")"
+  printf 'deleting namespace %s...\n' "$ns"
+  kubectl delete namespace "$ns" --ignore-not-found >/dev/null
+  rm -f "$SCRATCH_ROOT/$id/.started"
+  printf 'reset. your YAML in %s/%s was left alone.\n' "$SCRATCH_ROOT" "$id"
+}
+
+cmd_score() {
+  local dom passed total weight earned=0 possible=0 got
+  printf '%-8s %-7s %-8s %s\n' "DOMAIN" "WEIGHT" "PASSED" "EARNED"
+  for dom in 1 2 3 4 5; do
+    read -r passed total <<< "$(state_domain_counts "$dom")"
+    weight="${CKAD_WEIGHTS[$dom]}"
+    got=0
+    (( total > 0 )) && got=$(( passed * weight / total ))
+    earned=$(( earned + got )); possible=$(( possible + weight ))
+    printf '%-8s %-7s %-8s %s\n' "$dom" "$weight%" "$passed/$total" "$got"
+  done
+  printf '%-8s %-7s %-8s %s\n' "total" "$possible%" "" "$earned"
+  printf '\nCKAD needs 66. This is drill coverage, not a score prediction.\n'
+}
+
 main() {
   local cmd="${1:-}"; shift || true
   case "$cmd" in
     list)     cmd_list "${1:-}" ;;
     start)    [[ $# -ge 1 ]] || _die "start needs a drill id"; cmd_start "$1" ;;
+    verify)   [[ $# -ge 1 ]] || _die "verify needs a drill id"; cmd_verify "$1" ;;
+    solution) [[ $# -ge 1 ]] || _die "solution needs a drill id"; cmd_solution "$1" ;;
+    reset)    cmd_reset "${1:-}" ;;
+    score)    cmd_score ;;
     ""|-h|--help|help) usage ;;
     *)        _die "unknown command: $cmd (try: ckad help)" ;;
   esac
