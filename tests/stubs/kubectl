@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Fake kubectl for unit tests. Behavior is driven entirely by env vars:
+#   STUB_OUT     text printed on stdout for every call
+#   STUB_RC      exit code for every call (default 0)
+#   STUB_RC_SEQ  space-separated exit codes consumed one per call; the last
+#                value repeats once exhausted. Used to test retry_until.
+#   STUB_LOG     file this appends its full argv to, one line per call
+#   STUB_COUNT   file holding the call counter for STUB_RC_SEQ
+[[ -n "${STUB_LOG:-}" ]] && printf '%s\n' "$*" >> "$STUB_LOG"
+
+n=0
+if [[ -n "${STUB_COUNT:-}" ]]; then
+  n=$(cat "$STUB_COUNT" 2>/dev/null || echo 0)
+  printf '%s' "$(( n + 1 ))" > "$STUB_COUNT"
+fi
+
+[[ -n "${STUB_OUT:-}" ]] && printf '%s\n' "$STUB_OUT"
+
+if [[ -n "${STUB_RC_SEQ:-}" ]]; then
+  read -r -a codes <<< "$STUB_RC_SEQ"
+  idx=$n
+  (( idx >= ${#codes[@]} )) && idx=$(( ${#codes[@]} - 1 ))
+  exit "${codes[$idx]}"
+fi
+
+exit "${STUB_RC:-0}"

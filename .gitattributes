@@ -1,0 +1,4 @@
+*.sh text eol=lf
+*.yaml text eol=lf
+bin/ckad text eol=lf
+tests/stubs/kubectl text eol=lf

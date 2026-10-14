@@ -1,0 +1,4 @@
+scratch/
+.ckad-state
+*.local.yaml
+kubeconfig
