@@ -50,3 +50,32 @@ stub_rc()     { export STUB_RC="$1"; }
 stub_rc_seq() { export STUB_RC_SEQ="$1"; printf '0' > "$STUB_COUNT"; }
 stub_calls()  { cat "$STUB_LOG"; }
 stub_reset()  { : > "$STUB_LOG"; printf '0' > "$STUB_COUNT"; unset STUB_OUT STUB_RC STUB_RC_SEQ; }
+
+# --- fixture drill tree ----------------------------------------------------
+# Builds a minimal drills/ tree: domains 1 and 3, two drills in domain 1 and
+# one in domain 3. Echoes the drills root.
+make_drill_tree() { # <parent-dir>
+  local root="$1/drills"
+  mkdir -p "$root/1-design-build/01-sidecar" \
+           "$root/1-design-build/02-init-job" \
+           "$root/3-observability/01-broken-probe"
+
+  cat > "$root/1-design-build/01-sidecar/task.md" <<'EOF'
+# Sidecar sharing an emptyDir
+
+**Target time:** 8 min
+
+Do the thing.
+EOF
+  cat > "$root/1-design-build/02-init-job/task.md" <<'EOF'
+# Init container ordering and a failing Job
+
+**Target time:** 12 min
+EOF
+  cat > "$root/3-observability/01-broken-probe/task.md" <<'EOF'
+# Diagnose a failing readiness probe
+
+**Target time:** 10 min
+EOF
+  printf '%s\n' "$root"
+}
