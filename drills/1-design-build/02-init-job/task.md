@@ -1,4 +1,4 @@
-# Init container ordering and a Job that gives up
+# Init container ordering, and a Job that quits
 
 **Target time:** 12 min
 **Namespace:** `ckad-1-2`

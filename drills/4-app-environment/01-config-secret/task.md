@@ -1,4 +1,4 @@
-# ConfigMap as a volume, Secret as environment variables
+# ConfigMap volume and Secret env vars
 
 **Target time:** 12 min
 **Namespace:** `ckad-4-1`

@@ -47,7 +47,7 @@ _resolve() { # <id>
 
 cmd_list() { # [domain]
   local filter="${1:-}" id path last attempts passed best
-  printf '%-6s %-44s %-8s %s\n' "ID" "TITLE" "TARGET" "LAST"
+  printf '%-6s %-48s %-8s %s\n' "ID" "TITLE" "TARGET" "LAST"
   while IFS= read -r id; do
     [[ -n "$filter" && "$(drill_domain_of "$id")" != "$filter" ]] && continue
     path="$(drill_path "$id")" || continue
@@ -55,7 +55,8 @@ cmd_list() { # [domain]
     if (( attempts == 0 )); then last="-"
     elif (( passed == 1 )); then last="pass (${best}s, ${attempts} tries)"
     else last="fail (${attempts} tries)"; fi
-    printf '%-6s %-44s %-8s %s\n' \
+    # %.48s truncates so a long title can never break the column alignment.
+    printf '%-6s %-48.48s %-8s %s\n' \
       "$id" "$(drill_title "$path")" "$(drill_target "$path")" "$last"
   done < <(drill_ids)
 }
