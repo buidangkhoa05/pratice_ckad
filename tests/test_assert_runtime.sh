@@ -71,4 +71,15 @@ out="$(run_verify "ns ckad-2-1; RETRY_SLEEP=0 retry_until 2 assert_pod_ready --p
 expect_rc "$rc" 1 "retry_until gives up and reports the failure once"
 expect_contains "$out" "0/1" "retry_until timeout reports a single failure"
 
+# CKAD_RETRY_MAX caps the wait so selftest's empty-namespace phase is quick.
+stub_reset; stub_out "False"; stub_rc 0
+start=$SECONDS
+run_verify "ns ckad-2-1; CKAD_RETRY_MAX=1 RETRY_SLEEP=1 retry_until 300 assert_pod_ready --pod api; finish" >/dev/null
+elapsed=$(( SECONDS - start ))
+if (( elapsed < 10 )); then
+  expect_eq "capped" "capped" "CKAD_RETRY_MAX caps a long retry budget"
+else
+  expect_eq "waited ${elapsed}s" "capped" "CKAD_RETRY_MAX caps a long retry budget"
+fi
+
 harness_finish

@@ -2,7 +2,8 @@
 source "${CKAD_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}/lib/assert.sh"
 ns ckad-4-1
 
-T='{.spec.template.spec}'
+# Path fragment WITHOUT braces - each assertion wraps it.
+T='.spec.template.spec'
 
 assert_exists configmap/app-config
 assert_exists secret/app-secret
@@ -11,11 +12,11 @@ assert_jsonpath secret/app-secret '{.data.DB_PASS}' 'czNjcjN0'
 assert_jsonpath secret/app-secret '{.data.DB_USER}' 'YXBwdXNlcg=='
 
 assert_exists deployment/cfg
-assert_jsonpath deployment/cfg "$T.volumes[?(@.name==\"config\")].configMap.name" 'app-config'
+assert_jsonpath deployment/cfg "{$T.volumes[?(@.name=='config')].configMap.name}" 'app-config'
 assert_jsonpath deployment/cfg \
-  "$T.containers[0].volumeMounts[?(@.name==\"config\")].mountPath" '/etc/app'
+  "{$T.containers[0].volumeMounts[?(@.name=='config')].mountPath}" '/etc/app'
 # envFrom, not a hand-listed env block.
-assert_jsonpath deployment/cfg "$T.containers[0].envFrom[0].secretRef.name" 'app-secret'
+assert_jsonpath deployment/cfg "{$T.containers[0].envFrom[0].secretRef.name}" 'app-secret'
 
 retry_until 120 assert_pod_ready -l app=cfg --count 1
 

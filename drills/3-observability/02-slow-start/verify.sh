@@ -2,21 +2,24 @@
 source "${CKAD_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}/lib/assert.sh"
 ns ckad-3-2
 
-C='{.spec.template.spec.containers[0]}'
+# Path fragment WITHOUT braces - each assertion wraps it. Holding the braces
+# in the variable would put the closing brace mid-path and make kubectl treat
+# the remainder as literal text.
+C='.spec.template.spec.containers[0]'
 
 assert_exists deployment/web
 assert_jsonpath deployment/web '{.spec.replicas}' '2'
 
-assert_jsonpath deployment/web "$C.startupProbe.httpGet.path"      '/'
-assert_jsonpath deployment/web "$C.startupProbe.httpGet.port"      '80'
-assert_jsonpath deployment/web "$C.startupProbe.periodSeconds"     '3'
-assert_jsonpath deployment/web "$C.startupProbe.failureThreshold"  '10'
+assert_jsonpath deployment/web "{$C.startupProbe.httpGet.path}"      '/'
+assert_jsonpath deployment/web "{$C.startupProbe.httpGet.port}"      '80'
+assert_jsonpath deployment/web "{$C.startupProbe.periodSeconds}"     '3'
+assert_jsonpath deployment/web "{$C.startupProbe.failureThreshold}"  '10'
 
-assert_jsonpath deployment/web "$C.readinessProbe.httpGet.port"    '80'
-assert_jsonpath deployment/web "$C.readinessProbe.periodSeconds"   '5'
+assert_jsonpath deployment/web "{$C.readinessProbe.httpGet.port}"    '80'
+assert_jsonpath deployment/web "{$C.readinessProbe.periodSeconds}"   '5'
 
-assert_jsonpath deployment/web "$C.livenessProbe.httpGet.port"     '80'
-assert_jsonpath deployment/web "$C.livenessProbe.periodSeconds"    '10'
+assert_jsonpath deployment/web "{$C.livenessProbe.httpGet.port}"     '80'
+assert_jsonpath deployment/web "{$C.livenessProbe.periodSeconds}"    '10'
 
 retry_until 180 assert_pod_ready -l app=web --count 2
 

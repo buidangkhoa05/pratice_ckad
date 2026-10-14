@@ -223,10 +223,26 @@ assert_http() { # <url> [--status <n>]
   done
   _ns_ok || return 1
   local desc="GET $url returns $want_status"
-  got="$(_k run "probe-$RANDOM" --rm -i --restart=Never --quiet \
-            --image=curlimages/curl:8.10.1 --command -- \
-            curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null \
-          | tr -d '[:space:]')"
+
+  # Run detached, wait for the pod to finish, then read its logs. The obvious
+  # `kubectl run --rm -i` does not work here: --quiet suppresses the container
+  # output entirely, and without it the attach races the container so the
+  # status code is lost and only "pod deleted" comes back.
+  local pod="probe-$RANDOM" phase="" i
+  _k run "$pod" --restart=Never --image=curlimages/curl:8.10.1 --command -- \
+      curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" >/dev/null 2>&1
+
+  for (( i = 0; i < 30; i++ )); do
+    phase="$(_k get "pod/$pod" -o jsonpath='{.status.phase}' 2>/dev/null)"
+    [[ "$phase" == "Succeeded" || "$phase" == "Failed" ]] && break
+    sleep 1
+  done
+
+  # curl without -f exits 0 for any response, so a 404 still lands in the
+  # logs; a connection failure exits non-zero and logs 000.
+  got="$(_k logs "pod/$pod" 2>/dev/null | tr -d '[:space:]')"
+  _k delete "pod/$pod" --ignore-not-found --wait=false >/dev/null 2>&1
+
   if [[ "$got" == "$want_status" ]]; then
     report_pass "$desc"
   else
@@ -238,6 +254,12 @@ assert_http() { # <url> [--status <n>]
 # runs it once more for real so the output shows a single result.
 retry_until() { # <seconds> <assertion> [args...]
   local timeout="$1"; shift
+  # CKAD_RETRY_MAX caps every wait. selftest sets it low for the
+  # empty-namespace phase, where nothing will ever become ready and waiting
+  # the full budget of every assertion costs minutes per drill.
+  if [[ -n "${CKAD_RETRY_MAX:-}" ]] && (( timeout > CKAD_RETRY_MAX )); then
+    timeout="$CKAD_RETRY_MAX"
+  fi
   local deadline=$(( SECONDS + timeout ))
   local saved_pass=$REPORT_PASS saved_fail=$REPORT_FAIL
   while (( SECONDS < deadline )); do

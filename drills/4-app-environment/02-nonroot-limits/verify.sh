@@ -2,21 +2,22 @@
 source "${CKAD_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}/lib/assert.sh"
 ns ckad-4-2
 
-T='{.spec.template.spec}'
+# Path fragment WITHOUT braces - each assertion wraps it.
+T='.spec.template.spec'
 
 assert_exists deployment/secure
-assert_jsonpath deployment/secure "$T.securityContext.runAsNonRoot" 'true'
-assert_jsonpath deployment/secure "$T.securityContext.runAsUser"    '101'
+assert_jsonpath deployment/secure "{$T.securityContext.runAsNonRoot}" 'true'
+assert_jsonpath deployment/secure "{$T.securityContext.runAsUser}"    '101'
 
 assert_jsonpath deployment/secure \
-  "$T.containers[0].securityContext.allowPrivilegeEscalation" 'false'
+  "{$T.containers[0].securityContext.allowPrivilegeEscalation}" 'false'
 assert_jsonpath deployment/secure \
-  "$T.containers[0].securityContext.capabilities.drop[0]" 'ALL'
+  "{$T.containers[0].securityContext.capabilities.drop[0]}" 'ALL'
 
-assert_jsonpath deployment/secure "$T.containers[0].resources.requests.cpu"    '100m'
-assert_jsonpath deployment/secure "$T.containers[0].resources.requests.memory" '64Mi'
-assert_jsonpath deployment/secure "$T.containers[0].resources.limits.cpu"      '200m'
-assert_jsonpath deployment/secure "$T.containers[0].resources.limits.memory"   '128Mi'
+assert_jsonpath deployment/secure "{$T.containers[0].resources.requests.cpu}"    '100m'
+assert_jsonpath deployment/secure "{$T.containers[0].resources.requests.memory}" '64Mi'
+assert_jsonpath deployment/secure "{$T.containers[0].resources.limits.cpu}"      '200m'
+assert_jsonpath deployment/secure "{$T.containers[0].resources.limits.memory}"   '128Mi'
 
 retry_until 150 assert_pod_ready -l app=secure --count 1
 

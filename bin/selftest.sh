@@ -28,8 +28,10 @@ check_drill() { # <id>
   if [[ ! -f "$path/verify.sh" ]]; then
     printf 'x %s: no verify.sh\n' "$id"; FAILED=1; return
   fi
-  if [[ ! -d "$path/.solution" ]] || ! compgen -G "$path/.solution/*.yaml" >/dev/null; then
-    printf 'x %s: no .solution/*.yaml to apply\n' "$id"; FAILED=1; return
+  local apply_script="$path/.solution/apply.sh"
+  if [[ ! -d "$path/.solution" ]] \
+     || { [[ ! -x "$apply_script" ]] && ! compgen -G "$path/.solution/*.yaml" >/dev/null; }; then
+    printf 'x %s: no .solution/*.yaml and no .solution/apply.sh\n' "$id"; FAILED=1; return
   fi
 
   printf '\n--- %s ---\n' "$id"
@@ -40,7 +42,13 @@ check_drill() { # <id>
 
   # Phase 1: the reference solution must satisfy the drill's own verify script.
   [[ -x "$path/setup.sh" ]] && NS="$ns" bash "$path/setup.sh" >/dev/null 2>&1
-  kubectl -n "$ns" apply -f "$path/.solution/" >/dev/null 2>&1
+  # Drills whose answer is a sequence of commands (a rollback, a kustomize
+  # build) ship .solution/apply.sh instead of plain manifests.
+  if [[ -x "$apply_script" ]]; then
+    NS="$ns" bash "$apply_script" >/dev/null 2>&1
+  else
+    kubectl -n "$ns" apply -f "$path/.solution/" >/dev/null 2>&1
+  fi
   bash "$path/verify.sh" >/dev/null 2>&1; rc=$?
   if (( rc == 0 )); then
     printf '  ok   solution satisfies verify.sh\n'
@@ -51,10 +59,12 @@ check_drill() { # <id>
     FAILED=1
   fi
 
-  # Phase 2: with nothing applied, verify.sh must fail.
+  # Phase 2: with nothing applied, verify.sh must fail. Cap the retry budgets:
+  # nothing will ever become ready in an empty namespace, so honoring every
+  # `retry_until 180` would add ten minutes per drill for no added confidence.
   kubectl delete namespace "$ns" --ignore-not-found --wait=true >/dev/null 2>&1
   kubectl create namespace "$ns" >/dev/null 2>&1
-  bash "$path/verify.sh" >/dev/null 2>&1; rc=$?
+  CKAD_RETRY_MAX=3 RETRY_SLEEP=1 bash "$path/verify.sh" >/dev/null 2>&1; rc=$?
   if (( rc != 0 )); then
     printf '  ok   verify.sh fails on an empty namespace\n'
   else
