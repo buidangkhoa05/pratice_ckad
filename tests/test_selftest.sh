@@ -66,4 +66,24 @@ out="$(selftest 3.1)"; rc=$?
 expect_rc "$rc" 1 "a drill with no .solution fails selftest"
 expect_contains "$out" "solution" "the missing .solution is named"
 
+# --- .solution/apply.sh replaces the plain apply ---
+# Drills whose answer is a command sequence (a rollback, a kustomize build)
+# ship apply.sh instead of manifests, and need no *.yaml at all.
+SEQ="$DRILLS/3-observability/02-sequenced"
+mkdir -p "$SEQ/.solution"
+printf '# Sequenced drill\n' > "$SEQ/task.md"
+printf '#!/usr/bin/env bash\ntouch "%s/applied"\nprintf "%%s" "$NS" > "%s/apply-ns"\n' \
+  "$TMP" "$TMP" > "$SEQ/.solution/apply.sh"
+chmod +x "$SEQ/.solution/apply.sh"
+cat > "$SEQ/verify.sh" <<EOF
+#!/usr/bin/env bash
+[[ -f "$TMP/applied" ]] && exit 0
+exit 1
+EOF
+chmod +x "$SEQ/verify.sh"
+
+out="$(selftest 3.2)"; rc=$?
+expect_rc "$rc" 0 "a drill with .solution/apply.sh and no yaml passes selftest"
+expect_eq "$(cat "$TMP/apply-ns" 2>/dev/null)" "ckad-3-2" "apply.sh runs with NS set to the drill namespace"
+
 harness_finish

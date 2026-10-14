@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+spec:
+  volumes:
+    - name: content
+      emptyDir: {}
+  initContainers:
+    - name: seed
+      image: busybox:1.36
+      command: ["sh", "-c", "echo '<h1>seeded</h1>' > /work/index.html"]
+      volumeMounts:
+        - name: content
+          mountPath: /work
+  containers:
+    - name: web
+      image: nginx:1.27-alpine
+      volumeMounts:
+        - name: content
+          mountPath: /usr/share/nginx/html

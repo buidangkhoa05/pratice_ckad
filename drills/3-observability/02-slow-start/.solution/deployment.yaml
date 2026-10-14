@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          command: ["sh", "-c", "sleep 20; nginx -g 'daemon off;'"]
+          ports:
+            - containerPort: 80
+          # failureThreshold 10 x periodSeconds 3 allows 30s of startup, which
+          # covers the 20s sleep with margin. Tightening it to 5 is how you
+          # get a CrashLoopBackOff that looks like an application bug.
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 3
+            failureThreshold: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 10

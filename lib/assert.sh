@@ -187,7 +187,13 @@ assert_exec() { # [-l sel | --pod name] [-c container] [--contains str] [--expec
   elif [[ -n "$want" ]]; then desc="in pod/$target_pod: [$*] outputs \"$want\""
   else desc="in pod/$target_pod: [$*] succeeds"; fi
 
-  out="$(_k exec "$target_pod" "${cargs[@]}" -- "$@" 2>&1)"; rc=$?
+  # MSYS2_ARG_CONV_EXCL is not optional on Git Bash. Without it, MSYS rewrites
+  # any argument that looks like an absolute Unix path into a Windows path
+  # before kubectl sees it, so `cat /usr/share/nginx/html/index.html` arrives
+  # in the container as `cat C:/Program Files/Git/usr/share/...`. Scoped to
+  # this call because selftest's `kubectl apply -f <host path>` still needs
+  # the conversion.
+  out="$(MSYS2_ARG_CONV_EXCL='*' _k exec "$target_pod" "${cargs[@]}" -- "$@" 2>&1)"; rc=$?
 
   if (( expect_fail )); then
     if (( rc != 0 )); then report_pass "$desc"

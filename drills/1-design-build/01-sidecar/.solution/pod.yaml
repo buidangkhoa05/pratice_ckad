@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: logger
+spec:
+  volumes:
+    - name: logs
+      emptyDir: {}
+  containers:
+    - name: app
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - while true; do echo "$(date) app-heartbeat" >> /var/log/app.log; sleep 2; done
+      volumeMounts:
+        - name: logs
+          mountPath: /var/log
+    - name: sidecar
+      image: busybox:1.36
+      # touch first: tail -f on a file that does not exist yet exits at once,
+      # and the app container may not have created it when the sidecar starts.
+      command:
+        - sh
+        - -c
+        - touch /var/log/app.log; tail -f /var/log/app.log
+      volumeMounts:
+        - name: logs
+          mountPath: /var/log

@@ -39,6 +39,13 @@ out="$(run_verify "ns ckad-4-1; assert_exec --pod cfg --contains mode=production
 expect_rc "$rc" 0 "assert_exec passes when output contains the string"
 expect_contains "$(stub_calls)" "cat /etc/app/app.properties" "assert_exec passes the command through"
 
+# Absolute Unix paths must reach the container intact. Git Bash rewrites them
+# into Windows paths unless MSYS2_ARG_CONV_EXCL is set for the exec call.
+stub_reset; stub_out "mode=production"
+out="$(run_verify "ns ckad-4-1; assert_exec --pod cfg -- cat /etc/app/app.properties; finish")"
+expect_contains "$(stub_calls)" "cat /etc/app/app.properties" \
+  "assert_exec does not let MSYS rewrite an absolute path argument"
+
 stub_reset; stub_out "web-abc123"
 out="$(run_verify "ns ckad-4-1; assert_exec -l app=cfg -- printenv DB_PASS; finish")"; rc=$?
 expect_contains "$(stub_calls)" "exec web-abc123" "assert_exec resolves a selector to a pod name (kubectl exec rejects -l)"
