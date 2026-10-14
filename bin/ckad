@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# ckad - drive CKAD practice drills.
+#
+#   ckad list [domain]   ckad start <id>     ckad verify <id>
+#   ckad solution <id>   ckad reset [<id>|--all]   ckad score
+
+set -uo pipefail
+
+CKAD_ROOT="${CKAD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+export CKAD_ROOT
+source "$CKAD_ROOT/lib/drills.sh"
+source "$CKAD_ROOT/lib/state.sh"
+SCRATCH_ROOT="${SCRATCH_ROOT:-$CKAD_ROOT/scratch}"
+
+_die() { printf 'ckad: %s\n' "$1" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+usage: ckad <command> [args]
+
+  list [domain]        list drills, newest result per drill
+  start <id>           print the task, create its namespace, start the timer
+  verify <id>          check your work against the live cluster
+  solution <id>        show the reference answer (requires one verify attempt)
+  reset [<id>|--all]   delete the drill namespace, or rebuild the cluster
+  score                per-domain pass rate, weighted like the exam
+
+ids look like 3.2 (domain 3, drill 2)
+EOF
+}
+
+# Echoes the drill path, or reports the valid ids and returns 1.
+#
+# This RETURNS rather than exits: callers invoke it in a command substitution,
+# where an `exit` would only kill the subshell and let the caller carry on with
+# an empty path. Every caller must use `|| exit 1`.
+_resolve() { # <id>
+  local p rc
+  p="$(drill_path "$1")"; rc=$?
+  if (( rc != 0 )); then
+    printf 'ckad: no drill %s\n\nvalid ids:\n' "$1" >&2
+    drill_ids | sed 's/^/  /' >&2
+    return 1
+  fi
+  printf '%s\n' "$p"
+}
+
+cmd_list() { # [domain]
+  local filter="${1:-}" id path last attempts passed best
+  printf '%-6s %-44s %-8s %s\n' "ID" "TITLE" "TARGET" "LAST"
+  while IFS= read -r id; do
+    [[ -n "$filter" && "$(drill_domain_of "$id")" != "$filter" ]] && continue
+    path="$(drill_path "$id")" || continue
+    read -r attempts passed best <<< "$(state_get "$id")"
+    if (( attempts == 0 )); then last="-"
+    elif (( passed == 1 )); then last="pass (${best}s, ${attempts} tries)"
+    else last="fail (${attempts} tries)"; fi
+    printf '%-6s %-44s %-8s %s\n' \
+      "$id" "$(drill_title "$path")" "$(drill_target "$path")" "$last"
+  done < <(drill_ids)
+}
+
+cmd_start() { # <id>
+  local id="$1" path ns
+  path="$(_resolve "$id")" || exit 1
+  ns="$(drill_ns "$id")"
+
+  kubectl get namespace "$ns" >/dev/null 2>&1 \
+    || kubectl create namespace "$ns" >/dev/null \
+    || _die "could not create namespace $ns - is the cluster running? try: cluster/bootstrap.sh"
+
+  if [[ -x "$path/setup.sh" ]]; then
+    printf 'seeding cluster state...\n'
+    NS="$ns" bash "$path/setup.sh" || _die "setup.sh failed for $id"
+  fi
+
+  mkdir -p "$SCRATCH_ROOT/$id"
+  date +%s > "$SCRATCH_ROOT/$id/.started"
+
+  printf '\n'
+  cat "$path/task.md"
+  cat <<EOF
+
+---
+namespace: $ns
+work in:   $SCRATCH_ROOT/$id
+check:     ckad verify $id
+EOF
+}
+
+main() {
+  local cmd="${1:-}"; shift || true
+  case "$cmd" in
+    list)     cmd_list "${1:-}" ;;
+    start)    [[ $# -ge 1 ]] || _die "start needs a drill id"; cmd_start "$1" ;;
+    ""|-h|--help|help) usage ;;
+    *)        _die "unknown command: $cmd (try: ckad help)" ;;
+  esac
+}
+
+main "$@"
